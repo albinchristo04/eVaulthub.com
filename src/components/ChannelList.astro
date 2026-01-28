@@ -1,0 +1,115 @@
+---
+export interface Channel {
+  channel_name: string;
+  decoded_url: string;
+}
+
+export interface Props {
+  channels: Channel[];
+  matchTitle: string;
+}
+
+const { channels, matchTitle } = Astro.props;
+---
+
+<div class="channel-selector" id="channelSelector">
+  <h2 class="channel-selector-title">📺 Seleccionar Canal</h2>
+  <div class="channel-buttons" role="tablist">
+    {channels.map((channel, index) => (
+      <button 
+        class={`channel-button ${index === 0 ? 'active' : ''}`}
+        data-channel-url={channel.decoded_url}
+        data-channel-index={index}
+        role="tab"
+        aria-selected={index === 0 ? 'true' : 'false'}
+        aria-controls="playerIframe"
+      >
+        {channel.channel_name || `Canal ${index + 1}`}
+      </button>
+    ))}
+  </div>
+</div>
+
+<script is:inline>
+  (function() {
+    function initChannelSelector() {
+      const selector = document.getElementById('channelSelector');
+      if (!selector) return;
+
+      const channelButtons = selector.querySelectorAll('.channel-button');
+      const playerIframe = document.getElementById('playerIframe');
+      
+      if (!playerIframe) {
+        console.error('Player iframe not found!');
+        return;
+      }
+
+      function selectChannel(button) {
+        if (!button) return;
+        
+        const url = button.getAttribute('data-channel-url');
+        if (!url) return;
+
+        console.log('Switching to channel:', url);
+        
+        // Update selection styling
+        channelButtons.forEach(btn => {
+          btn.classList.remove('active');
+          btn.setAttribute('aria-selected', 'false');
+        });
+        button.classList.add('active');
+        button.setAttribute('aria-selected', 'true');
+        
+        // Clear any previous loading state if we decide to add one
+        playerIframe.style.opacity = '0.5';
+        
+        // Force update the src
+        // We use a small timeout to ensure the browser registers the change if needed, 
+        // but normally setting .src or .setAttribute('src', ...) is enough.
+        playerIframe.setAttribute('src', url);
+        
+        // Restore opacity when loaded
+        playerIframe.onload = () => {
+          playerIframe.style.opacity = '1';
+        };
+      }
+
+      // Add click listeners to all buttons
+      channelButtons.forEach(button => {
+        button.addEventListener('click', (e) => {
+          e.preventDefault();
+          selectChannel(button);
+        });
+      });
+
+      // Handle hash auto-selection (e.g., #channel-1)
+      function handleHash() {
+        const hash = window.location.hash;
+        if (hash && hash.startsWith('#channel-')) {
+          const indexString = hash.replace('#channel-', '');
+          const index = parseInt(indexString, 10);
+          if (!isNaN(index) && channelButtons[index]) {
+            console.log('Hash detected, selecting channel index:', index);
+            selectChannel(channelButtons[index]);
+          }
+        }
+      }
+
+      // Listen for hash changes (e.g. from homepage links)
+      window.addEventListener('hashchange', handleHash);
+      
+      // Check hash on initial load
+      handleHash();
+    }
+
+    // Run initialization
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initChannelSelector);
+    } else {
+      initChannelSelector();
+    }
+    
+    // Also run on Astro page transitions if using ViewTransitions (optional)
+    document.addEventListener('astro:page-load', initChannelSelector);
+  })();
+</script>

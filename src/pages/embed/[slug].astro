@@ -1,0 +1,165 @@
+---
+export async function getStaticPaths() {
+  const SERVER1_URL = 'https://raw.githubusercontent.com/albinchristo04/blogger-autopost/refs/heads/main/rojadirecta_events.json';
+  const SERVER2_URL = 'https://raw.githubusercontent.com/albinchristo04/ptv/refs/heads/main/events.json';
+
+  function slugify(text) {
+    return text.toString().toLowerCase().normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9\s-]/g, '')
+      .replace(/\s+/g, '-').replace(/-+/g, '-').replace(/^-+/, '').replace(/-+$/, '').substring(0, 100);
+  }
+
+  function parseDescription(desc) {
+    const parts = desc.split(':');
+    const competition = parts[0]?.trim() || 'Deportes';
+    const matchTitle = parts.slice(1).join(':').trim().replace(/\n/g, ' ') || desc.trim();
+    return { competition, matchTitle };
+  }
+
+  const allMatches = [];
+  const now = new Date();
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  tomorrow.setHours(23, 59, 59, 999);
+
+  // Fetch Server 1
+  try {
+    const res1 = await fetch(SERVER1_URL);
+    const data1 = await res1.json();
+    const matches1 = data1.events || data1 || [];
+    matches1.forEach(m => {
+      const { competition, matchTitle } = parseDescription(m.description || '');
+      const slug = slugify(`${competition}-${matchTitle}`);
+      const channels = (m.channels || []).map(ch => ({
+        channel_name: ch.name || ch.channel_name,
+        decoded_url: ch.decoded_url || ch.url
+      }));
+      allMatches.push({
+        params: { slug },
+        props: { 
+          match: { match_title: matchTitle, competition, date: m.date, time: m.time, channels }
+        }
+      });
+    });
+  } catch (e) {
+    console.error('Error fetching Server 1:', e);
+  }
+
+  // Fetch Server 2
+  try {
+    const res2 = await fetch(SERVER2_URL);
+    const data2 = await res2.json();
+    const streams2 = data2.events?.streams || [];
+    streams2.forEach(cat => {
+      if (cat.category === '24/7 Streams') return;
+
+      cat.streams?.forEach(s => {
+        const startsAt = s.starts_at * 1000;
+        const endsAt = s.ends_at * 1000;
+        const matchDate = new Date(startsAt);
+        const matchEndDate = new Date(endsAt);
+        
+        if (matchDate > tomorrow) return;
+
+        if (endsAt > 0) {
+           if (matchEndDate < now) return;
+        } else {
+           if (new Date(startsAt + (3 * 60 * 60 * 1000)) < now) return;
+        }
+
+        const competition = s.category_name || cat.category || 'Deportes';
+        const matchTitle = s.name;
+        const slug = slugify(`${competition}-${matchTitle}`);
+        
+        const date = matchDate.toISOString().split('T')[0];
+        const time = matchDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+        
+        const channels = [{
+          channel_name: s.tag || 'Server 2',
+          decoded_url: s.iframe
+        }];
+        
+        if (s.substreams && Array.isArray(s.substreams)) {
+          s.substreams.forEach((sub, idx) => {
+            channels.push({
+              channel_name: sub.name || `Opción ${idx + 2}`,
+              decoded_url: sub.iframe
+            });
+          });
+        }
+
+        allMatches.push({
+          params: { slug },
+          props: { 
+            match: { match_title: matchTitle, competition, date, time, channels }
+          }
+        });
+      });
+    });
+  } catch (e) {
+    console.error('Error fetching Server 2:', e);
+  }
+
+  const uniqueMatches = [];
+  const slugMap = new Map();
+  
+  allMatches.forEach(m => {
+    if (!slugMap.has(m.params.slug)) {
+      slugMap.set(m.params.slug, m);
+      uniqueMatches.push(m);
+    } else {
+      const existing = slugMap.get(m.params.slug);
+      m.props.match.channels.forEach(ch => {
+        if (!existing.props.match.channels.find(ech => ech.decoded_url === ch.decoded_url)) {
+          existing.props.match.channels.push(ch);
+        }
+      });
+    }
+  });
+
+  return uniqueMatches;
+}
+
+const { match } = Astro.props;
+const firstChannel = match.channels?.[0]?.decoded_url || '';
+---
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{match.match_title} | Embed</title>
+  <style>
+    body, html {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #000;
+    }
+    .embed-container {
+      position: relative;
+      width: 100%;
+      height: 100%;
+    }
+    iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+  </style>
+  <!-- Popup Ad Code -->
+  <script src="https://pl26869306.effectivegatecpm.com/22/9f/cc/229fcc7fac3be2c689fa4fa174ce4169.js"></script>
+</head>
+<body>
+  <div class="embed-container">
+    <iframe 
+      src={firstChannel} 
+      allowfullscreen
+      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+    ></iframe>
+  </div>
+</body>
+</html>

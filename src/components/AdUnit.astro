@@ -1,0 +1,66 @@
+---
+export interface Props {
+  type: '250x250' | '300x100' | '320x50' | '728x90';
+  className?: string;
+}
+
+const { type, className = '' } = Astro.props;
+
+const ads = {
+  '250x250': {
+    slot: '2063942933',
+    style: 'display:inline-block;width:250px;height:250px'
+  },
+  '300x100': {
+    slot: '3480966381',
+    style: 'display:inline-block;width:300px;height:100px'
+  },
+  '320x50': {
+    slot: '8797884002',
+    style: 'display:inline-block;width:320px;height:50px'
+  },
+  '728x90': {
+    slot: '4498534581',
+    style: 'display:inline-block;width:728px;height:90px'
+  }
+};
+
+const currentAd = ads[type];
+---
+
+<div class={`ad-container ${type} ${className}`}>
+  <ins class="adsbygoogle"
+       style={currentAd.style}
+       data-ad-client="ca-pub-7025462814384100"
+       data-ad-slot={currentAd.slot}></ins>
+  <script is:inline>
+       (adsbygoogle = window.adsbygoogle || []).push({});
+  </script>
+</div>
+
+<style>
+  .ad-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: var(--space-md) auto;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: var(--border-radius-sm);
+    min-width: 320px;
+    min-height: 50px;
+  }
+  
+  .ad-container.728x90 {
+    max-width: 100%;
+  }
+
+  @media (max-width: 768px) {
+    .ad-container.728x90 {
+      /* Google Ads usually handles responsiveness if configured, 
+         but we ensure it doesn't break layout */
+      transform: scale(calc(min(1, 100vw / 760))); 
+      margin: var(--space-sm) 0;
+    }
+  }
+</style>

@@ -1,0 +1,259 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import AdUnit from '../components/AdUnit.astro';
+
+const title = 'Partidos en Vivo Hoy | dx.evaulthub.com';
+const description = 'Ver partidos de fútbol, baloncesto, tenis y más deportes en vivo hoy.';
+
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  "name": "dx.evaulthub.com",
+  "url": "https://dx.evaulthub.com",
+  "description": description
+};
+---
+
+<BaseLayout title={title} description={description} jsonLd={jsonLd}>
+  <div class="ad-top">
+    <AdUnit type="728x90" />
+  </div>
+
+  <section class="matches-section">
+    <h1 class="section-title">⚽ PROGRAMACIÓN DE HOY EN VIVO</h1>
+    
+    <div class="server-selector">
+      <button id="btnServer1" class="server-btn active">SERVIDOR 1</button>
+      <button id="btnServer2" class="server-btn">SERVIDOR 2</button>
+    </div>
+
+    <div id="matchesContainer" class="matches-container">
+      <div class="loading">
+        <div class="loading-spinner"></div>
+        <p class="loading-text">Cargando partidos...</p>
+      </div>
+    </div>
+  </section>
+
+  <div class="ad-bottom">
+    <AdUnit type="300x100" />
+    <AdUnit type="250x250" />
+  </div>
+</BaseLayout>
+
+<style is:global>
+  .server-selector {
+    display: flex;
+    gap: var(--space-md);
+    margin-bottom: var(--space-lg);
+    justify-content: center;
+  }
+  .server-btn {
+    padding: var(--space-sm) var(--space-xl);
+    background: #333;
+    color: #fff;
+    border-radius: var(--border-radius);
+    font-weight: 700;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+  }
+  .server-btn.active {
+    background: var(--color-primary);
+  }
+  .server-btn:hover:not(.active) {
+    background: #444;
+  }
+</style>
+
+<script is:inline>
+  const SERVER1_URL = 'https://raw.githubusercontent.com/albinchristo04/blogger-autopost/refs/heads/main/rojadirecta_events.json';
+  const SERVER2_URL = 'https://raw.githubusercontent.com/albinchristo04/ptv/refs/heads/main/events.json';
+  
+  let currentServer = 1;
+  let server1Data = null;
+  let server2Data = null;
+
+  function slugify(text) {
+    return text.toString().toLowerCase().normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9\s-]/g, '')
+      .replace(/\s+/g, '-').replace(/-+/g, '-').replace(/^-+/, '').replace(/-+$/, '').substring(0, 100);
+  }
+  
+  function parseDescription(desc) {
+    const parts = desc.split(':');
+    const competition = parts[0]?.trim() || 'Deportes';
+    const matchTitle = parts.slice(1).join(':').trim().replace(/\n/g, ' ') || desc.trim();
+    return { competition, matchTitle };
+  }
+  
+  function getSportIcon(text) {
+    const t = text.toLowerCase();
+    if (t.includes('fútbol') || t.includes('liga') || t.includes('champions') || t.includes('premier') || t.includes('football')) return '⚽';
+    if (t.includes('baloncesto') || t.includes('nba') || t.includes('basketball')) return '🏀';
+    if (t.includes('tenis') || t.includes('atp') || t.includes('wta') || t.includes('tennis')) return '🎾';
+    if (t.includes('f1') || t.includes('formula') || t.includes('motogp')) return '🏎️';
+    if (t.includes('boxeo') || t.includes('ufc') || t.includes('mma')) return '🥊';
+    return '🏆';
+  }
+
+  function normalizeData(server, data) {
+    if (server === 1) {
+      const events = data.events || data || [];
+      return events.map(e => {
+        const { competition, matchTitle } = parseDescription(e.description || '');
+        return {
+          match_title: matchTitle,
+          competition: competition,
+          date: e.date,
+          time: e.time?.substring(0,5) || '00:00',
+          slug: slugify(`${competition}-${matchTitle}`),
+          channels: e.channels || []
+        };
+      });
+    } else {
+      const streams = data.events?.streams || [];
+      const normalized = [];
+      const now = new Date();
+      const tomorrow = new Date(now);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      tomorrow.setHours(23, 59, 59, 999);
+
+      streams.forEach(cat => {
+        // Remove 24/7 Streams
+        if (cat.category === '24/7 Streams') return;
+
+        cat.streams?.forEach(s => {
+          const startsAt = s.starts_at * 1000;
+          const endsAt = s.ends_at * 1000;
+          const matchDate = new Date(startsAt);
+          const matchEndDate = new Date(endsAt);
+          
+          // Only show Today and Tomorrow
+          if (matchDate > tomorrow) return;
+
+          // Remove matches that are older (already finished)
+          // If ends_at is available, use it. Otherwise, assume a 3-hour window from starts_at.
+          if (endsAt > 0) {
+             if (matchEndDate < now) return;
+          } else {
+             // Assume 3 hours duration if ends_at is not provided
+             if (new Date(startsAt + (3 * 60 * 60 * 1000)) < now) return;
+          }
+
+          const competition = s.category_name || cat.category || 'Deportes';
+          const matchTitle = s.name;
+          normalized.push({
+            match_title: matchTitle,
+            competition: competition,
+            date: matchDate.toISOString().split('T')[0],
+            time: matchDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', hour12: false }),
+            slug: slugify(`${competition}-${matchTitle}`),
+            channels: [{ name: s.tag || 'Server 2' }]
+          });
+        });
+      });
+      return normalized;
+    }
+  }
+  
+  function renderMatches(matches) {
+    const groups = {};
+    matches.forEach(m => {
+      const d = m.date || 'Sin fecha';
+      if (!groups[d]) groups[d] = [];
+      groups[d].push(m);
+    });
+    
+    let html = '';
+    const sortedDates = Object.keys(groups).sort((a,b) => a.localeCompare(b)); // ASC order for dates
+    
+    sortedDates.forEach((date) => {
+      const list = groups[date];
+      html += `<div class="date-group"><div class="date-header">📅 ${date}</div>`;
+      list.forEach((m, i) => {
+        const icon = getSportIcon(`${m.match_title} ${m.competition}`);
+        const channels = m.channels || [];
+        
+        html += `
+          <article class="match-card" data-i="${i}">
+            <div class="match-header" role="button" tabindex="0">
+              <span class="match-time">${m.time}</span>
+              <span class="match-sport-icon">${icon}</span>
+              <div class="match-info">
+                <h3 class="match-title">${m.match_title}</h3>
+                <p class="match-competition">${m.competition}</p>
+              </div>
+              <div class="match-toggle"><span>VER CANALES</span><span class="match-toggle-arrow">▼</span></div>
+            </div>
+            <div class="channels-panel">
+              ${channels.length ? `<div class="channels-grid">${channels.map((c,j) => 
+                `<a href="/partido/${m.slug}/#channel-${j}" class="channel-btn">${c.name || c.channel_name || 'Canal '+(j+1)}</a>`).join('')}</div>` : ''}
+              <a href="/partido/${m.slug}/" class="match-page-btn">📺 PÁGINA DEL PARTIDO</a>
+            </div>
+          </article>`;
+      });
+      html += '</div>';
+    });
+    return html;
+  }
+  
+  function initAccordions() {
+    document.querySelectorAll('.match-card').forEach(card => {
+      const h = card.querySelector('.match-header');
+      h?.addEventListener('click', () => card.classList.toggle('expanded'));
+    });
+  }
+  
+  async function loadData(server) {
+    const c = document.getElementById('matchesContainer');
+    c.innerHTML = '<div class="loading"><div class="loading-spinner"></div><p class="loading-text">Cargando partidos...</p></div>';
+    
+    try {
+      let data;
+      if (server === 1) {
+        if (!server1Data) {
+          const r = await fetch(SERVER1_URL);
+          server1Data = await r.json();
+        }
+        data = server1Data;
+      } else {
+        if (!server2Data) {
+          const r = await fetch(SERVER2_URL);
+          server2Data = await r.json();
+        }
+        data = server2Data;
+      }
+
+      const matches = normalizeData(server, data);
+      
+      if (!matches.length) { 
+        c.innerHTML = '<div class="error"><p>No hay partidos disponibles en este servidor.</p></div>'; 
+        return; 
+      }
+      
+      c.innerHTML = renderMatches(matches);
+      initAccordions();
+    } catch (e) {
+      console.error(e);
+      c.innerHTML = '<div class="error"><p>Error al cargar el servidor ' + server + '.</p><button class="retry-btn" onclick="location.reload()">Reintentar</button></div>';
+    }
+  }
+
+  document.getElementById('btnServer1').addEventListener('click', () => {
+    if (currentServer === 1) return;
+    currentServer = 1;
+    document.getElementById('btnServer1').classList.add('active');
+    document.getElementById('btnServer2').classList.remove('active');
+    loadData(1);
+  });
+
+  document.getElementById('btnServer2').addEventListener('click', () => {
+    if (currentServer === 2) return;
+    currentServer = 2;
+    document.getElementById('btnServer2').classList.add('active');
+    document.getElementById('btnServer1').classList.remove('active');
+    loadData(2);
+  });
+
+  document.addEventListener('DOMContentLoaded', () => loadData(1));
+</script>

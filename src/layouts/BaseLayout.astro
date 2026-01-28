@@ -1,0 +1,137 @@
+---
+import '../styles/global.css';
+
+export interface Props {
+  title: string;
+  description: string;
+  canonical?: string;
+  ogImage?: string;
+  ogType?: string;
+  jsonLd?: object;
+}
+
+const { 
+  title, 
+  description, 
+  canonical = Astro.url.href,
+  ogImage = '/og-default.jpg',
+  ogType = 'website',
+  jsonLd
+} = Astro.props;
+
+const siteName = 'dx.evaulthub.com';
+const siteUrl = 'https://dx.evaulthub.com';
+---
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  
+  <!-- Primary Meta Tags -->
+  <title>{title}</title>
+  <meta name="title" content={title}>
+  <meta name="description" content={description}>
+  <meta name="robots" content="index, follow">
+  <meta name="author" content={siteName}>
+  <link rel="canonical" href={canonical}>
+  
+  <!-- Open Graph / Facebook -->
+  <meta property="og:type" content={ogType}>
+  <meta property="og:url" content={canonical}>
+  <meta property="og:title" content={title}>
+  <meta property="og:description" content={description}>
+  <meta property="og:image" content={`${siteUrl}${ogImage}`}>
+  <meta property="og:site_name" content={siteName}>
+  <meta property="og:locale" content="es_ES">
+  
+  <!-- Twitter -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:url" content={canonical}>
+  <meta name="twitter:title" content={title}>
+  <meta name="twitter:description" content={description}>
+  <meta name="twitter:image" content={`${siteUrl}${ogImage}`}>
+  
+  <!-- Favicon -->
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="apple-touch-icon" href="/favicon.svg">
+  
+  <!-- Preconnect -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  
+  
+  <!-- Google AdSense -->
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7025462814384100" crossorigin="anonymous"></script>
+  
+  <!-- Popup Ad Code -->
+  <script src="https://pl26869306.effectivegatecpm.com/22/9f/cc/229fcc7fac3be2c689fa4fa174ce4169.js"></script>
+
+  <!-- JSON-LD Structured Data -->
+  {jsonLd && (
+    <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
+  )}
+</head>
+<body>
+  <!-- Header -->
+  <header class="header">
+    <div class="header-container">
+      <a href="/" class="logo">
+        <span class="logo-icon">⚽</span>
+        <span>{siteName}</span>
+      </a>
+      
+      <button class="menu-toggle" id="menuToggle" aria-label="Abrir menú">
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+      
+      <nav class="nav" id="mainNav">
+        <a href="/" class="nav-link">Inicio</a>
+        <a href="/share" class="nav-link">Compartir</a>
+        <a href="/#futbol" class="nav-link">Fútbol</a>
+        <a href="/#baloncesto" class="nav-link">Baloncesto</a>
+        <a href="/#tenis" class="nav-link">Tenis</a>
+        <a href="/#otros" class="nav-link">Otros Deportes</a>
+      </nav>
+    </div>
+  </header>
+  
+  <!-- Main Content -->
+  <main class="main">
+    <slot />
+  </main>
+  
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="footer-container">
+      <div class="footer-logo">⚽ {siteName}</div>
+      <nav class="footer-links">
+        <a href="/" class="footer-link">Inicio</a>
+        <a href="/privacidad" class="footer-link">Privacidad</a>
+        <a href="/contacto" class="footer-link">Contacto</a>
+        <a href="/dmca" class="footer-link">DMCA</a>
+      </nav>
+      <p class="footer-copy">© {new Date().getFullYear()} {siteName}. Todos los derechos reservados.</p>
+      <p class="footer-disclaimer">
+        Este sitio no aloja ningún contenido de video. Todos los enlaces apuntan a contenido alojado en servidores externos.
+      </p>
+    </div>
+  </footer>
+  
+  <!-- Mobile Menu Toggle Script -->
+  <script>
+    const menuToggle = document.getElementById('menuToggle');
+    const mainNav = document.getElementById('mainNav');
+    
+    if (menuToggle && mainNav) {
+      menuToggle.addEventListener('click', () => {
+        mainNav.classList.toggle('active');
+      });
+    }
+  </script>
+</body>
+</html>

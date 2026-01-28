@@ -1,0 +1,95 @@
+---
+export interface Channel {
+  channel_name: string;
+  decoded_url: string;
+}
+
+export interface Match {
+  match_title: string;
+  competition: string;
+  date: string;
+  time: string;
+  channels: Channel[];
+  slug: string;
+}
+
+export interface Props {
+  match: Match;
+  index: number;
+}
+
+const { match, index } = Astro.props;
+
+const getSportIcon = (title: string, competition: string): string => {
+  const text = `${title} ${competition}`.toLowerCase();
+  if (text.includes('fútbol') || text.includes('football') || text.includes('liga') || text.includes('premier') || text.includes('champions') || text.includes('copa')) return '⚽';
+  if (text.includes('baloncesto') || text.includes('basketball') || text.includes('nba') || text.includes('euroleague')) return '🏀';
+  if (text.includes('tenis') || text.includes('tennis') || text.includes('atp') || text.includes('wta')) return '🎾';
+  if (text.includes('f1') || text.includes('formula') || text.includes('motogp') || text.includes('racing')) return '🏎️';
+  if (text.includes('boxeo') || text.includes('boxing') || text.includes('ufc') || text.includes('mma')) return '🥊';
+  if (text.includes('ciclismo') || text.includes('cycling') || text.includes('tour')) return '🚴';
+  if (text.includes('golf')) return '⛳';
+  if (text.includes('rugby')) return '🏉';
+  if (text.includes('hockey')) return '🏒';
+  if (text.includes('béisbol') || text.includes('baseball') || text.includes('mlb')) return '⚾';
+  return '🏆';
+};
+
+const sportIcon = getSportIcon(match.match_title, match.competition);
+const matchUrl = `/partido/${match.slug}/`;
+---
+
+<article class="match-card" data-match-index={index}>
+  <div class="match-header" role="button" tabindex="0" aria-expanded="false">
+    <span class="match-time">{match.time}</span>
+    <span class="match-sport-icon" aria-hidden="true">{sportIcon}</span>
+    <div class="match-info">
+      <h3 class="match-title">{match.match_title}</h3>
+      <p class="match-competition">{match.competition}</p>
+    </div>
+    <div class="match-toggle">
+      <span>VER CANALES</span>
+      <span class="match-toggle-arrow" aria-hidden="true">▼</span>
+    </div>
+  </div>
+  
+  <div class="channels-panel" aria-hidden="true">
+    {match.channels && match.channels.length > 0 && (
+      <div class="channels-grid">
+        {match.channels.map((channel, idx) => (
+          <span class="channel-btn" data-channel-index={idx}>
+            {channel.channel_name || `Canal ${idx + 1}`}
+          </span>
+        ))}
+      </div>
+    )}
+    <a href={matchUrl} class="match-page-btn">
+      📺 PÁGINA DEL PARTIDO
+    </a>
+  </div>
+</article>
+
+<style>
+  /* Scoped styles handled in global.css */
+</style>
+
+<script>
+  document.querySelectorAll('.match-card').forEach(card => {
+    const header = card.querySelector('.match-header');
+    
+    header?.addEventListener('click', () => {
+      card.classList.toggle('expanded');
+      const panel = card.querySelector('.channels-panel');
+      const isExpanded = card.classList.contains('expanded');
+      header.setAttribute('aria-expanded', String(isExpanded));
+      panel?.setAttribute('aria-hidden', String(!isExpanded));
+    });
+    
+    header?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        header.click();
+      }
+    });
+  });
+</script>

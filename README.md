@@ -1,2 +1,2 @@
-# eVaulthub.com
-Premium live sports streaming platform with real-time match updates and automatic code synchronization. Watch all major sports events with HD quality streaming and instant match notifications.
+# dx.evaulthub.com
+Tarjeta Roja, Rojadirecta TV, Deportes En Vivo, Premier League, LaLiga, UEFA Champions League, Liga MX, Copa de la Liga Argentina, Formula 1 y mucho más.

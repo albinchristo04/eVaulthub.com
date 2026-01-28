@@ -1,0 +1,221 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import ChannelList from '../../components/ChannelList.astro';
+import ShareButtons from '../../components/ShareButtons.astro';
+import AdUnit from '../../components/AdUnit.astro';
+
+export async function getStaticPaths() {
+  const SERVER1_URL = 'https://raw.githubusercontent.com/albinchristo04/blogger-autopost/refs/heads/main/rojadirecta_events.json';
+  const SERVER2_URL = 'https://raw.githubusercontent.com/albinchristo04/ptv/refs/heads/main/events.json';
+
+  function slugify(text) {
+    return text.toString().toLowerCase().normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9\s-]/g, '')
+      .replace(/\s+/g, '-').replace(/-+/g, '-').replace(/^-+/, '').replace(/-+$/, '').substring(0, 100);
+  }
+
+  function parseDescription(desc) {
+    const parts = desc.split(':');
+    const competition = parts[0]?.trim() || 'Deportes';
+    const matchTitle = parts.slice(1).join(':').trim().replace(/\n/g, ' ') || desc.trim();
+    return { competition, matchTitle };
+  }
+
+  const allMatches = [];
+  const now = new Date();
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  tomorrow.setHours(23, 59, 59, 999);
+
+  // Fetch Server 1
+  try {
+    const res1 = await fetch(SERVER1_URL);
+    const data1 = await res1.json();
+    const matches1 = data1.events || data1 || [];
+    matches1.forEach(m => {
+      const { competition, matchTitle } = parseDescription(m.description || '');
+      const slug = slugify(`${competition}-${matchTitle}`);
+      const channels = (m.channels || []).map(ch => ({
+        channel_name: ch.name || ch.channel_name,
+        decoded_url: ch.decoded_url || ch.url
+      }));
+      allMatches.push({
+        params: { slug },
+        props: { 
+          match: { match_title: matchTitle, competition, date: m.date, time: m.time, channels }
+        }
+      });
+    });
+  } catch (e) {
+    console.error('Error fetching Server 1:', e);
+  }
+
+  // Fetch Server 2
+  try {
+    const res2 = await fetch(SERVER2_URL);
+    const data2 = await res2.json();
+    const streams2 = data2.events?.streams || [];
+    streams2.forEach(cat => {
+      // Remove 24/7 Streams
+      if (cat.category === '24/7 Streams') return;
+
+      cat.streams?.forEach(s => {
+        const startsAt = s.starts_at * 1000;
+        const endsAt = s.ends_at * 1000;
+        const matchDate = new Date(startsAt);
+        const matchEndDate = new Date(endsAt);
+        
+        // Only show Today and Tomorrow
+        if (matchDate > tomorrow) return;
+
+        // Remove matches that are older (already finished)
+        if (endsAt > 0) {
+           if (matchEndDate < now) return;
+        } else {
+           if (new Date(startsAt + (3 * 60 * 60 * 1000)) < now) return;
+        }
+
+        const competition = s.category_name || cat.category || 'Deportes';
+        const matchTitle = s.name;
+        const slug = slugify(`${competition}-${matchTitle}`);
+        
+        const date = matchDate.toISOString().split('T')[0];
+        const time = matchDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+        
+        const channels = [{
+          channel_name: s.tag || 'Server 2',
+          decoded_url: s.iframe
+        }];
+        
+        if (s.substreams && Array.isArray(s.substreams)) {
+          s.substreams.forEach((sub, idx) => {
+            channels.push({
+              channel_name: sub.name || `Opción ${idx + 2}`,
+              decoded_url: sub.iframe
+            });
+          });
+        }
+
+        allMatches.push({
+          params: { slug },
+          props: { 
+            match: { match_title: matchTitle, competition, date, time, channels }
+          }
+        });
+      });
+    });
+  } catch (e) {
+    console.error('Error fetching Server 2:', e);
+  }
+
+  const uniqueMatches = [];
+  const slugMap = new Map();
+  
+  allMatches.forEach(m => {
+    if (!slugMap.has(m.params.slug)) {
+      slugMap.set(m.params.slug, m);
+      uniqueMatches.push(m);
+    } else {
+      const existing = slugMap.get(m.params.slug);
+      m.props.match.channels.forEach(ch => {
+        if (!existing.props.match.channels.find(ech => ech.decoded_url === ch.decoded_url)) {
+          existing.props.match.channels.push(ch);
+        }
+      });
+    }
+  });
+
+  return uniqueMatches;
+}
+
+const { match } = Astro.props;
+const { slug } = Astro.params;
+
+const matchUrl = `https://dx.evaulthub.com/partido/${slug}/`;
+const title = `${match.match_title} EN VIVO | dx.evaulthub.com`;
+const description = `Ver ${match.match_title} en vivo. ${match.competition}.`;
+
+const firstChannel = match.channels?.[0]?.decoded_url || '';
+
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@graph": [
+    { "@type": "SportsEvent", "name": match.match_title, "startDate": match.date, "url": matchUrl },
+    { "@type": "BreadcrumbList", "itemListElement": [
+      { "@type": "ListItem", "position": 1, "name": "Inicio", "item": "https://dx.evaulthub.com/" },
+      { "@type": "ListItem", "position": 2, "name": match.match_title, "item": matchUrl }
+    ]}
+  ]
+};
+
+const embedCode = `<iframe src="https://dx.evaulthub.com/embed/${slug}/" width="100%" height="500" frameborder="0" allowfullscreen></iframe>`;
+---
+
+<BaseLayout title={title} description={description} jsonLd={jsonLd}>
+  <div class="ad-top">
+    <AdUnit type="728x90" />
+  </div>
+
+  <div class="match-page">
+    <header class="match-page-header">
+      <h1 class="match-page-title">{match.match_title}</h1>
+      <p class="match-competition">{match.competition}</p>
+      <div class="live-status">
+        <span class="live-badge"><span class="live-dot"></span> EN VIVO</span>
+      </div>
+    </header>
+
+    <div class="vpn-notice">
+      <div class="vpn-notice-title">🔐 ¿Problemas para ver el stream?</div>
+      <p>Usa VPN gratuita 1.1.1.1 de Cloudflare.</p>
+      <a href="https://1.1.1.1/" target="_blank" rel="noopener" class="vpn-link">Descargar 1.1.1.1</a>
+    </div>
+
+    <AdUnit type="320x50" className="mb-lg" />
+
+    {match.channels?.length > 0 && <ChannelList channels={match.channels} matchTitle={match.match_title} />}
+
+    <AdUnit type="300x100" />
+
+    <div class="player-wrapper">
+      <div class="player-container">
+        <iframe 
+          id="playerIframe" 
+          class="player-iframe" 
+          src={firstChannel} 
+          loading="lazy" 
+          allowfullscreen
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+        ></iframe>
+      </div>
+    </div>
+
+    <AdUnit type="320x50" />
+
+    <ShareButtons matchTitle={match.match_title} matchUrl={matchUrl} />
+
+    <AdUnit type="250x250" />
+
+    <div class="seo-content">
+      <h2>📺 Ver {match.match_title} en Vivo</h2>
+      <p>Disfruta de {match.match_title} en vivo. {match.competition} transmisión gratuita.</p>
+    </div>
+
+    <div class="embed-section">
+      <h2 class="embed-title">📋 Código Embed</h2>
+      <textarea class="embed-code" readonly>{embedCode}</textarea>
+      <button class="copy-btn" id="copyBtn">Copiar</button>
+    </div>
+
+    <AdUnit type="728x90" className="mt-lg" />
+  </div>
+</BaseLayout>
+
+<script is:inline>
+  document.getElementById('copyBtn')?.addEventListener('click', function() {
+    document.querySelector('.embed-code')?.select();
+    document.execCommand('copy');
+    this.textContent = '¡Copiado!';
+    setTimeout(() => this.textContent = 'Copiar', 2000);
+  });
+</script>
