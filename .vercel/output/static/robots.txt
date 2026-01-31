@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://dx.evaulthub.com/sitemap.xml
